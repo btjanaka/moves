@@ -19,7 +19,7 @@ const PORT = 3000;
 const MOL_TYPES = new Set(['pdb', 'sdf', 'mol2', 'xyz', 'cube']);
 
 // Time before a file is deleted - 1 day
-const DELETE_TIME = 1440000;
+const DELETE_TIME = 86400000;
 
 
 const app = express();
