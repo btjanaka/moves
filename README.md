@@ -22,8 +22,8 @@ Note that in order to provide this link, MOVES must download the molecule file,
 so that 3Dmol.js can access it without having to be authenticated by Slack. This
 has 2 important implications:
 1. The links provided are public to some extent, in that anybody with the link
-   can view the file.
-1. _The link will expire in approximately 24 hours._ To prevent the server from
+   can view the molecule.
+1. __The link will expire in approximately 24 hours.__ To prevent the server from
    running out of space, files are set to be deleted 24 hours after they are
    downloaded. This means that the link will no longer work. This does not mean
    one has to upload the file to Slack again; they can simply share the file
@@ -39,5 +39,5 @@ supports. As of writing, these filetypes are `pdb`, `sdf`, `mol2`, `xyz`, and
 
 ## Credits
 
-* Many thanks to Dr. Mobley and his Mobley Lab for coming up with the idea for
-  this app.
+Many thanks to Dr. Mobley and his Mobley Lab for coming up with the idea for
+this app!
