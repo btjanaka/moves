@@ -37,6 +37,17 @@ app.use('/molecules', express.static('./molecules'));
 app.use(bodyParser.urlencoded({extended: true}));
 
 
+// Creates a directory for the app's files
+function createDirectory() {
+  mkdirp('molecules', function(err) {
+    if (err) {
+      console.error(err);
+    } else {
+      console.log('Created directory for storing molecule files.');
+    }
+  });
+}
+
 // Checks whether the given file has an extension that 3dmol.js supports.
 function validFileType(filename) {
   const pos = filename.lastIndexOf('.');
@@ -106,11 +117,5 @@ app.get('/', function(req, res) {
 // Handle errors for Slack
 slackEvents.on('error', console.error);
 
-mkdirp('molecules', function(err) {
-  if (err) {
-    console.error(err);
-  } else {
-    console.log('Created directory for storing molecule files.');
-  }
-});
+createDirectory();
 app.listen(PORT, () => console.log(`MOVES now running on ${PORT}`));
