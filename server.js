@@ -13,7 +13,7 @@ const API_KEY = process.env.MOVES_API_KEY;
 const APP_URL = process.env.MOVES_APP_URL;
 const SLACK_SECRET = process.env.SLACK_SECRET;
 const VIEWER_URL = 'http://3dmol.csb.pitt.edu/viewer.html?url=';
-const PORT = 3000;
+const PORT = process.env.PORT;
 
 // Molecule file types that the app supports
 const MOL_TYPES = new Set(['pdb', 'sdf', 'mol2', 'xyz', 'cube']);
