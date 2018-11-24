@@ -101,21 +101,6 @@ slackEvents.on('file_shared', (event) => {
 // Handle errors for Slack
 slackEvents.on('error', console.error);
 
-// Default page
-app.get('/', function(req, res) {
-  res.end(fs.readFileSync('home.html'));
-});
-
-// Echoing for a slash command
-app.post('/echo', function(req, res) {
-  res.json({
-    response_type: 'in_channel',
-    text: 'RECEIVED "' + req.body.text + '"',
-    attachments: [{text: 'from @' + req.body.user_name}],
-  });
-  res.end();
-});
-
 mkdirp('molecules', function(err) {
   if (err) {
     console.error(err);
