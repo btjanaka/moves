@@ -98,6 +98,11 @@ slackEvents.on('file_shared', (event) => {
       .catch(console.error);
 });
 
+// Default page
+app.get('/', function(req, res) {
+  res.end(fs.readFileSync('index.html'));
+});
+
 // Handle errors for Slack
 slackEvents.on('error', console.error);
 
