@@ -13,6 +13,7 @@ const API_KEY = process.env.MOVES_API_KEY;
 const APP_URL = process.env.MOVES_APP_URL;
 const SLACK_SECRET = process.env.SLACK_SECRET;
 const VIEWER_URL = 'http://3dmol.csb.pitt.edu/viewer.html?url=';
+const VIEWER_OPTIONS = '&style=stick';
 const PORT = process.env.PORT;
 
 // Molecule file types that the app supports
@@ -100,7 +101,7 @@ slackEvents.on('file_shared', (event) => {
         const filename = `${d.getTime()}_${res.file.name}`;
         const fullFilename = `./molecules/${filename}`;
         const serverFileUrl = `${APP_URL}/molecules/${filename}`;
-        const viewerFileUrl = `${VIEWER_URL}${serverFileUrl}`;
+        const viewerFileUrl = `${VIEWER_URL}${serverFileUrl}${VIEWER_OPTIONS}`;
 
         downloadFile(res.file.url_private, fullFilename);
         setDeletionTimer(fullFilename);
