@@ -13,21 +13,46 @@ molecules without the need for any external viewer.
 
 ## Usage
 
-MOVES works as follows. In Slack, MOVES is a bot that listens for file uploads
-and shares. Whenever a file is uploaded or shared to a channel which MOVES is a
-part of, it automatically generates a link to a webpage where users can view the
-molecule using 3Dmol.js.
+MOVES is invoked as a slash command within Slack:
+```
+/moves [file URL]
+```
+The file URL can be a link to:
+* A molecule file on the team's Slack\*
+* A molecule file on some external link
 
-Note that in order to provide this link, MOVES must download the molecule file,
-so that 3Dmol.js can access it without having to be authenticated by Slack. This
-has 2 important implications:
-1. The links provided are public to some extent, in that anybody with the link
-   can view the molecule.
-1. __The link will expire in approximately 24 hours.__ To prevent the server from
-   running out of space, files are set to be deleted 24 hours after they are
-   downloaded. This means that the link will no longer work. This does not mean
-   one has to upload the file to Slack again; they can simply share the file
-   again.
+After the file URL is passed via the slash command, MOVES will return a link
+where the file may be viewed using 3dmol.js, or an appropriate error message.
+
+\* This must be a link to a file, not a link to a message with a file. You can
+obtain this link by obtaining over the top right corner of the preview, clicking
+on the three dots that appear, and clicking "Copy link to file".
+
+### Errors
+
+The following errors may occur when using MOVES.
+
+If the file is a Slack file link, MOVES will check the following:
+* The file is one of the supported molecule file types
+* The file is on the correct Slack (i.e. MOVES can access it)
+If any of these conditions are not satisfied, an appropriate error message is
+returned.
+
+If the file is an external link or a Slack link (but not to a file), MOVES
+performs no checks. Instead, if the file is invalid, 3dmol.js will show no
+molecule.
+
+If the file is not a URL, an appropriate message is returned.
+
+### Link Persistence
+
+When given a Slack file link, MOVES downloads the file and stores it. After
+approximately 24 hours, the file is permitted to be deleted and will be removed
+in the next "sweep". __This means that links for Slack files are not guaranteed
+to be valid after 24 hours.__
+
+Other files do not suffer this problem and will work as long as the link to the
+original file works.
 
 
 ## Filetypes Supported
