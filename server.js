@@ -86,12 +86,19 @@ function addTeam(teamId, oauth) {
 
 // Reads teams from the csv file.
 function readExistingTeams() {
-  console.log("Reading in existing teams");
-  const rl = readline.createInterface(
-      {input: fs.createReadStream(TEAM_CSV), output: new Stream});
-  rl.on('line', (line) => {
-    tokens = line.split(',');  // There won't be commas in other parts of input
-    addTeam(tokens[0], tokens[1]);
+  console.log('Reading in existing teams');
+  fs.stat(TEAM_CSV, (err, stats) => {
+    if (err) {
+      return;
+    } else {
+      const rl = readline.createInterface(
+          {input: fs.createReadStream(TEAM_CSV), output: new Stream});
+      rl.on('line', (line) => {
+        tokens =
+            line.split(',');  // There won't be commas in other parts of input
+        addTeam(tokens[0], tokens[1]);
+      });
+    }
   });
 }
 
@@ -103,7 +110,7 @@ function init() {
 
 // Saves all teams to the csv file.
 function saveTeams(callback) {
-  console.log("Saving existing teams");
+  console.log('Saving existing teams');
   data = Object.keys(TEAMS).map((team) => `${team},${TEAMS[team].oauth}`);
   fs.writeFile(TEAM_CSV, data.join('\n'), callback);
 }
@@ -182,7 +189,8 @@ function deletionSweep() {
 function generateUrl(teamId, url, callback) {
   if (isSlackUrl(url)) {
     const fileId = url.match(SLACK_URL_PATT)[1];
-    TEAMS[teamId].webclient.files.info({file: fileId})
+    TEAMS[teamId]
+        .webclient.files.info({file: fileId})
         .then((res) => {
           // Check file type
           if (!validFileType(res.file.name)) {
@@ -285,9 +293,9 @@ function handleExit() {
   });
 }
 
-process.on('SIGINT', handleExit);  // Sent by Ctrl-C
-process.on('SIGTERM', handleExit); // Sent by heroku
-process.on('SIGUSR2', handleExit); // Sent by nodemon
+process.on('SIGINT', handleExit);   // Sent by Ctrl-C
+process.on('SIGTERM', handleExit);  // Sent by heroku
+process.on('SIGUSR2', handleExit);  // Sent by nodemon
 
 //
 // Startup
