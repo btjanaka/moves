@@ -1,2 +1,5 @@
 molecules/*
 node_modules/*
+.env
+.testenv
+teams.csv

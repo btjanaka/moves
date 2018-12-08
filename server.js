@@ -1,25 +1,32 @@
 // Slack bot that interacts with 3dmol.js to enable Slack users to view 3D
-// molecules via an external link.
+// molecules via an external link. See README for more info.
 
 //
 // Dependencies
 //
+
+const Stream = require('stream');
 const bodyParser = require('body-parser');
 const express = require('express');
 const fs = require('fs');
+const isUrl = require('is-url');
 const mkdirp = require('mkdirp');
+const readline = require('readline');
 const request = require('request');
 const {WebClient} = require('@slack/client');
-const isUrl = require('is-url');
 
 //
 // Constants
 //
-const API_KEY = process.env.MOVES_API_KEY;
-const APP_URL = process.env.MOVES_APP_URL;
-const VIEWER_URL = 'http://3dmol.csb.pitt.edu/viewer.html?url=';
-const VIEWER_OPTIONS = '&style=stick';
+
 const PORT = process.env.PORT;
+
+// The URL of the app itself
+const APP_URL = process.env.MOVES_APP_URL;
+
+// Base URL for 3dmol.js and options for viewing
+const VIEWER_URL = 'http://3dmol.csb.pitt.edu/viewer.html?url=';
+const VIEWER_OPTIONS = '&style=stick:colorscheme~Jmol';
 
 // For matching URL's that come from Slack files
 const SLACK_URL_PATT = /^https?.*\.slack\.com\/files\/.*\/(.*)\/.*$/;
@@ -46,15 +53,18 @@ const MOL_DIRNAME = './molecules';
 // URL mount point for molecules directory
 const MOL_URL_MOUNT = 'molecules';
 
+// Dictionary where each team is identified by its id and has an oauth and
+// webclient associated with it.
+const TEAMS = new Object();
+
+// Name of the file containing the team ID's and OAuth tokens.
+const TEAM_CSV = './teams.csv';
+
 const app = express();
-const web = new WebClient(API_KEY);
 
-// Serve molecule files
-app.use(`/${MOL_URL_MOUNT}`, express.static(MOL_DIRNAME));
-
-// Slack sends requests in the format of 'application/x-www-form-urlencoded'
-app.use(bodyParser.urlencoded({extended: true}));
-
+//
+// functions
+//
 
 // Creates a directory for the app's files and prints a debugging message
 // stating so.
@@ -66,6 +76,36 @@ function createDirectory() {
       console.log('Created directory for storing molecule files.');
     }
   });
+}
+
+// Adds a team to the TEAMS dictionary
+function addTeam(teamId, oauth) {
+  TEAMS[teamId] = {oauth: oauth, webclient: new WebClient(oauth)};
+  console.log(`Team ${teamId} has been added`);
+}
+
+// Reads teams from the csv file.
+function readExistingTeams() {
+  console.log("Reading in existing teams");
+  const rl = readline.createInterface(
+      {input: fs.createReadStream(TEAM_CSV), output: new Stream});
+  rl.on('line', (line) => {
+    tokens = line.split(',');  // There won't be commas in other parts of input
+    addTeam(tokens[0], tokens[1]);
+  });
+}
+
+// Runs any initializations for the app
+function init() {
+  createDirectory();
+  readExistingTeams();
+}
+
+// Saves all teams to the csv file.
+function saveTeams(callback) {
+  console.log("Saving existing teams");
+  data = Object.keys(TEAMS).map((team) => `${team},${TEAMS[team].oauth}`);
+  fs.writeFile(TEAM_CSV, data.join('\n'), callback);
 }
 
 // Tells whether the given URL is one that came from a file on Slack and hence
@@ -88,11 +128,11 @@ function generateViewerUrl(fileUrl) {
 // Downloads the given Slack file and saves it to the given filename (the
 // filename can also be a path). Also prints a debugging message that this has
 // happened.
-function downloadFile(link, fullFilename) {
+function downloadFile(teamId, link, fullFilename) {
   request({
     url: link,
     headers: {
-      Authorization: 'Bearer ' + API_KEY,
+      Authorization: 'Bearer ' + TEAMS[teamId].oauth,
     },
   }).pipe(fs.createWriteStream(fullFilename));
   console.log(`Saved ${fullFilename}`);
@@ -137,16 +177,16 @@ function deletionSweep() {
 }
 
 // Creates a URL where the user may view the given file, or an appropriate error
-// message. The callback fn takes in the URL, as well as another no-parameter
+// message. The callback takes in the URL, as well as another no-parameter
 // callback.
-function generateUrl(url, fn) {
+function generateUrl(teamId, url, callback) {
   if (isSlackUrl(url)) {
     const fileId = url.match(SLACK_URL_PATT)[1];
-    web.files.info({file: fileId})
+    TEAMS[teamId].webclient.files.info({file: fileId})
         .then((res) => {
           // Check file type
           if (!validFileType(res.file.name)) {
-            fn(ERROR_FILETYPE, () => {});
+            callback(ERROR_FILETYPE, () => {});
             return;
           }
 
@@ -154,28 +194,48 @@ function generateUrl(url, fn) {
           const filename = `${d.getTime()}_${res.file.name}`;
           const fullFilename = `${MOL_DIRNAME}/${filename}`;
           const serverFileUrl = `${APP_URL}/${MOL_URL_MOUNT}/${filename}`;
+          const sth = teamId;
 
-          fn(generateViewerUrl(serverFileUrl), () => {
+          callback(generateViewerUrl(serverFileUrl), () => {
+            console.log(`Successfully accessed Slack file ${url}`);
             deletionSweep();
-            downloadFile(res.file.url_private, fullFilename);
+            downloadFile(teamId, res.file.url_private, fullFilename);
           });
         })
         .catch((error) => {
-          fn(ERROR_FILE_NOT_FOUND, () => {});
+          console.log(`Tried and failed to access Slack file ${url}`);
+          callback(ERROR_FILE_NOT_FOUND, () => {});
         });
   } else if (isUrl(url)) {
-    fn(generateViewerUrl(url), () => {});
+    console.log(`Generated link to ${url}`);
+    callback(generateViewerUrl(url), () => {});
   } else {
-    fn(ERROR_URL, () => {});
+    console.log(`Received a non-url: ${url}`);
+    callback(ERROR_URL, () => {});
   }
 }
 
+//
+// app configuration
+//
+
+// Serve molecule files
+app.use(`/${MOL_URL_MOUNT}`, express.static(MOL_DIRNAME));
+
+// Slack sends requests in the format of 'application/x-www-form-urlencoded'
+app.use(bodyParser.urlencoded({extended: true}));
+
+// Home page; helps tell if the app is running.
+app.get('/', function(req, res) {
+  res.end(fs.readFileSync('index.html'));
+});
+
 // Accepts requests to view molecules at the given URL.
 app.post('/view', function(req, res) {
-  // Send the response and then run a function that does a deletion sweep and
-  // possibly downloads the file. This downloading must occur after in order to
-  // guarantee the response is sent back before Slack times out.
-  generateUrl(req.body.text, (url, fileFn) => {
+  // Generates a response to Slack, then calls fileFn, which is a function that
+  // potentially downloads files from Slack and does a deletion sweep. fileFn
+  // must be executed after the response is sent to avoid timing out.
+  generateUrl(req.body.team_id, req.body.text, (url, fileFn) => {
     res.json({
       response_type: 'in_channel',
       text: url,
@@ -185,10 +245,53 @@ app.post('/view', function(req, res) {
   });
 });
 
-// Default page
-app.get('/', function(req, res) {
-  res.end(fs.readFileSync('index.html'));
+// Provides an "Add to Slack" button.
+app.get('/auth', function(req, res) {
+  res.sendFile('./add_to_slack.html');
 });
 
-createDirectory();
+// Obtains a workspace's OAuth token when installing to a new workspace.
+app.get('/auth/redirect', function(req, res) {
+  let options = {
+    uri: 'https://slack.com/api/oauth.access?code=' + req.query.code +
+        '&client_id=' + process.env.SLACK_CLIENT_ID +
+        '&client_secret=' + process.env.SLACK_CLIENT_SECRET +
+        '&redirect_uri=' + process.env.MOVES_APP_URL + '/auth/redirect',
+    method: 'GET'
+  };
+  request(options, (error, response, body) => {
+    let JSONresponse = JSON.parse(body);
+    addTeam(JSONresponse.team_id, JSONresponse.access_token);
+
+    // Send the user a response message
+    if (!JSONresponse.ok) {
+      res.send('Error encountered: \n' + JSON.stringify(JSONresponse))
+          .status(200)
+          .end();
+    } else {
+      res.send('Success!');
+    }
+  });
+});
+
+//
+// signal handling
+//
+
+// Performs any actions and exits the program gracefully.
+function handleExit() {
+  saveTeams(() => {
+    process.exit(0);
+  });
+}
+
+process.on('SIGINT', handleExit);  // Sent by Ctrl-C
+process.on('SIGTERM', handleExit); // Sent by heroku
+process.on('SIGUSR2', handleExit); // Sent by nodemon
+
+//
+// Startup
+//
+
+init();
 app.listen(PORT, () => console.log(`MOVES now running on ${PORT}`));
