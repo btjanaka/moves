@@ -55,7 +55,7 @@ const MOL_URL_MOUNT = 'molecules';
 
 // Dictionary where each team is identified by its id and has an oauth and
 // webclient associated with it.
-const TEAMS = new Object();
+const TEAMS = {};
 
 // Name of the file containing the team ID's and OAuth tokens.
 const TEAM_CSV = './teams.csv';
@@ -95,7 +95,7 @@ function readExistingTeams() {
           {input: fs.createReadStream(TEAM_CSV), output: new Stream});
       rl.on('line', (line) => {
         tokens =
-            line.split(',');  // There won't be commas in other parts of input
+            line.split(','); // There won't be commas in other parts of input
         addTeam(tokens[0], tokens[1]);
       });
     }
@@ -202,7 +202,6 @@ function generateUrl(teamId, url, callback) {
           const filename = `${d.getTime()}_${res.file.name}`;
           const fullFilename = `${MOL_DIRNAME}/${filename}`;
           const serverFileUrl = `${APP_URL}/${MOL_URL_MOUNT}/${filename}`;
-          const sth = teamId;
 
           callback(generateViewerUrl(serverFileUrl), () => {
             console.log(`Successfully accessed Slack file ${url}`);
@@ -255,20 +254,20 @@ app.post('/view', function(req, res) {
 
 // Provides an "Add to Slack" button.
 app.get('/auth', function(req, res) {
-  res.sendFile('./add_to_slack.html');
+  res.end(fs.readFileSync('add_to_slack.html'));
 });
 
 // Obtains a workspace's OAuth token when installing to a new workspace.
 app.get('/auth/redirect', function(req, res) {
-  let options = {
+  const options = {
     uri: 'https://slack.com/api/oauth.access?code=' + req.query.code +
         '&client_id=' + process.env.SLACK_CLIENT_ID +
         '&client_secret=' + process.env.SLACK_CLIENT_SECRET +
         '&redirect_uri=' + process.env.MOVES_APP_URL + '/auth/redirect',
-    method: 'GET'
+    method: 'GET',
   };
   request(options, (error, response, body) => {
-    let JSONresponse = JSON.parse(body);
+    const JSONresponse = JSON.parse(body);
     addTeam(JSONresponse.team_id, JSONresponse.access_token);
 
     // Send the user a response message
@@ -293,9 +292,9 @@ function handleExit() {
   });
 }
 
-process.on('SIGINT', handleExit);   // Sent by Ctrl-C
-process.on('SIGTERM', handleExit);  // Sent by heroku
-process.on('SIGUSR2', handleExit);  // Sent by nodemon
+process.on('SIGINT', handleExit); // Sent by Ctrl-C
+process.on('SIGTERM', handleExit); // Sent by heroku
+process.on('SIGUSR2', handleExit); // Sent by nodemon
 
 //
 // Startup
