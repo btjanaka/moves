@@ -5,6 +5,7 @@
 // Dependencies
 //
 
+const AWS = require('aws-sdk');
 const Stream = require('stream');
 const bodyParser = require('body-parser');
 const express = require('express');
@@ -45,75 +46,34 @@ const DELETE_TIME = 86400000;
 
 // How many file downloads the server should wait for before doing a deletion
 // sweep.
-const SWEEP_FREQ = 10;
+const SWEEP_FREQ = 100;
 
 // Name of directory for storing filenames
-const MOL_DIRNAME = './molecules';
-
-// URL mount point for molecules directory
-const MOL_URL_MOUNT = 'molecules';
+const MOL_DIRNAME = 'molecules';
 
 // Dictionary where each team is identified by its id and has an oauth and
 // webclient associated with it.
 const TEAMS = {};
 
 // Name of the file containing the team ID's and OAuth tokens.
-const TEAM_CSV = './teams.csv';
+const TEAM_CSV = 'teams.csv';
+
+// Keys for Amazon AWS
+const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
+const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME;
+const S3_BUCKET_URL = process.env.S3_BUCKET_URL;
+const S3_MOLDIR = 'molecules';
 
 const app = express();
+const s3 = new AWS.S3({
+  accessKeyId: AWS_ACCESS_KEY_ID,
+  secretAccessKey: AWS_SECRET_ACCESS_KEY,
+});
 
 //
-// functions
+// utility functions
 //
-
-// Creates a directory for the app's files and prints a debugging message
-// stating so.
-function createDirectory() {
-  mkdirp(MOL_DIRNAME, function(err) {
-    if (err) {
-      console.error(err);
-    } else {
-      console.log('Created directory for storing molecule files.');
-    }
-  });
-}
-
-// Adds a team to the TEAMS dictionary
-function addTeam(teamId, oauth) {
-  TEAMS[teamId] = {oauth: oauth, webclient: new WebClient(oauth)};
-  console.log(`Team ${teamId} has been added`);
-}
-
-// Reads teams from the csv file.
-function readExistingTeams() {
-  console.log('Reading in existing teams');
-  fs.stat(TEAM_CSV, (err, stats) => {
-    if (err) {
-      return;
-    } else {
-      const rl = readline.createInterface(
-          {input: fs.createReadStream(TEAM_CSV), output: new Stream});
-      rl.on('line', (line) => {
-        tokens =
-            line.split(','); // There won't be commas in other parts of input
-        addTeam(tokens[0], tokens[1]);
-      });
-    }
-  });
-}
-
-// Runs any initializations for the app
-function init() {
-  createDirectory();
-  readExistingTeams();
-}
-
-// Saves all teams to the csv file.
-function saveTeams(callback) {
-  console.log('Saving existing teams');
-  data = Object.keys(TEAMS).map((team) => `${team},${TEAMS[team].oauth}`);
-  fs.writeFile(TEAM_CSV, data.join('\n'), callback);
-}
 
 // Tells whether the given URL is one that came from a file on Slack and hence
 // can be parsed for a file ID.
@@ -132,33 +92,138 @@ function generateViewerUrl(fileUrl) {
   return `${VIEWER_URL}${fileUrl}${VIEWER_OPTIONS}`;
 }
 
-// Downloads the given Slack file and saves it to the given filename (the
-// filename can also be a path). Also prints a debugging message that this has
-// happened.
-function downloadFile(teamId, link, fullFilename) {
-  request({
-    url: link,
-    headers: {
-      Authorization: 'Bearer ' + TEAMS[teamId].oauth,
-    },
-  }).pipe(fs.createWriteStream(fullFilename));
-  console.log(`Saved ${fullFilename}`);
+// Saves all teams to the csv file, and saves the file to AWS.
+function saveTeams() {
+  console.log('Saving existing teams');
+  data = Object.keys(TEAMS).map((team) => `${team},${TEAMS[team].oauth}`);
+  fs.writeFile(TEAM_CSV, data.join('\n'), (err) => {
+    if (err) {
+      console.log(err);
+    } else {
+      saveTeamFile(() => {});
+    }
+  });
 }
 
-// Deletes a file in the molecule directory if it is outdated. Prints a
-// debugging message stating this has happened.
-function deleteMoleculeFile(filename) {
-  fileDate = parseInt(filename);
-  const d = new Date();
-  if (d.getTime() - fileDate > DELETE_TIME) {
-    fs.unlink(`${MOL_DIRNAME}/${filename}`, function(err) {
-      if (err) {
-        console.log(err);
-      } else {
-        console.log(`Deleted ${filename}`);
-      }
+// Adds a team to the TEAMS dictionary. Also saves the TEAM_CSV in AWS once
+// again if the save flag is set to true.
+function addTeam(teamId, oauth, save) {
+  TEAMS[teamId] = {oauth: oauth, webclient: new WebClient(oauth)};
+  console.log(`Team ${teamId} has been added`);
+  if (save) saveTeams();
+}
+
+// Saves the given file to the AWS bucket, using the given name and ACL (Access
+// Control List). callback is a function that takes no parameters and performs
+// some action once the upload is done.
+function uploadAwsFile(localFilename, awsFilename, awsAcl, callback) {
+  s3.upload(
+      {
+        ACL: awsAcl,
+        Body: fs.createReadStream(localFilename),
+        Bucket: S3_BUCKET_NAME,
+        Key: awsFilename,
+      },
+      (err, data) => {
+        if (err) {
+          console.log(`Error while uploading ${localFilename} to AWS`);
+          console.log(err, err.stack);
+        } else {
+          console.log(`Uploaded ${localFilename} to AWS as ${awsFilename}`);
+          callback();
+        }
+      },
+  );
+}
+
+// Saves the given molecule to AWS. Assumes the file is located in the molecules
+// directory.
+function saveMoleculeToAws(localFilename, callback) {
+  uploadAwsFile(
+      `${MOL_DIRNAME}/${localFilename}`,
+      `${S3_MOLDIR}/${localFilename}`,
+      'public-read',
+      callback,
+  );
+}
+
+// Saves the team file to AWS.
+function saveTeamFile(callback) {
+  uploadAwsFile(TEAM_CSV, TEAM_CSV, 'bucket-owner-read', callback);
+}
+
+// Downloads the given file from AWS and runs the given no-parameter callback
+// upon completion.
+function downloadAwsFile(localFilename, awsFilename, callback) {
+  const stream = s3.getObject({
+                     Bucket: S3_BUCKET_NAME,
+                     Key: awsFilename,
+                   })
+                     .createReadStream()
+                     .pipe(fs.createWriteStream(localFilename));
+  stream.on('finish', callback);
+}
+
+//
+// functions
+//
+
+// Creates a local directory for the app's files and prints a debugging message
+// stating so.
+function createLocalDirectory() {
+  mkdirp(MOL_DIRNAME, function(err) {
+    if (err) {
+      console.error(err);
+    } else {
+      console.log('Created directory for storing molecule files.');
+    }
+  });
+}
+
+// Reads in teams from the csv file.
+function readExistingTeams() {
+  console.log('Reading in existing teams');
+  downloadAwsFile(TEAM_CSV, TEAM_CSV, () => {
+    const rl = readline.createInterface({
+      input: fs.createReadStream(TEAM_CSV),
+      output: new Stream(),
     });
-  }
+    rl.on('line', (line) => {
+      tokens =
+          // There won't be commas in other parts of input
+          line.split(',');
+      addTeam(tokens[0], tokens[1], false);
+    });
+  });
+}
+
+// Runs any initializations for the app
+function init() {
+  createLocalDirectory();
+  readExistingTeams();
+}
+
+// Downloads the given Slack molecule file and saves it to the local molecule
+// directory. Streams this download to AWS and then deletes the local copy.
+function downloadMoleculeFile(teamId, link, filename) {
+  const stream = request({
+                   url: link,
+                   headers: {
+                     Authorization: 'Bearer ' + TEAMS[teamId].oauth,
+                   },
+                 }).pipe(fs.createWriteStream(`${MOL_DIRNAME}/${filename}`));
+  stream.on('finish', () => {
+    console.log(`Saved ${filename} locally`);
+    saveMoleculeToAws(filename, () => {
+      fs.unlink(`${MOL_DIRNAME}/${filename}`, function(err) {
+        if (err) {
+          console.log(err);
+        } else {
+          console.log(`Deleted ${filename} locally`);
+        }
+      });
+    });
+  });
 }
 
 // Every SWEEP_FREQ calls, iterates through all files in the directory and
@@ -169,22 +234,40 @@ function deletionSweep() {
     deletionSweep.sweepCount = 0;
   }
 
+  const cur = new Date();
+
   if (deletionSweep.sweepCount == 0) {
     console.log('Performing deletion sweep');
-    fs.readdir(MOL_DIRNAME, (err, files) => {
-      if (err) {
-        console.log(err);
-      } else {
-        files.forEach(deleteMoleculeFile);
-      }
-    });
+    s3.listObjects(
+        {
+          Bucket: S3_BUCKET_NAME,
+        },
+        (err, data) => {
+          if (err)
+            console.log(err, err.stack);
+          else
+            data.Contents.forEach((entry) => {
+              if (entry.Key.startsWith('molecules/') &&
+                  cur.getTime() - entry.LastModified.getTime() > DELETE_TIME) {
+                console.log(`Deleting ${entry.Key} from AWS`);
+                s3.deleteObject(
+                    {
+                      Bucket: S3_BUCKET_NAME,
+                      Key: entry.Key,
+                    },
+                    function(err, data) {
+                      if (err) console.log(err, err.stack);
+                    });
+              }
+            });
+        });
   }
 
   deletionSweep.sweepCount = (deletionSweep.sweepCount + 1) % SWEEP_FREQ;
 }
 
 // Creates a URL where the user may view the given file, or an appropriate error
-// message. The callback takes in the URL, as well as another no-parameter
+// message. The callback takes in the URL and another no-parameter
 // callback.
 function generateUrl(teamId, url, callback) {
   if (isSlackUrl(url)) {
@@ -192,7 +275,6 @@ function generateUrl(teamId, url, callback) {
     TEAMS[teamId]
         .webclient.files.info({file: fileId})
         .then((res) => {
-          // Check file type
           if (!validFileType(res.file.name)) {
             callback(ERROR_FILETYPE, () => {});
             return;
@@ -200,13 +282,12 @@ function generateUrl(teamId, url, callback) {
 
           const d = new Date();
           const filename = `${d.getTime()}_${res.file.name}`;
-          const fullFilename = `${MOL_DIRNAME}/${filename}`;
-          const serverFileUrl = `${APP_URL}/${MOL_URL_MOUNT}/${filename}`;
+          const serverFileUrl = `${S3_BUCKET_URL}/${S3_MOLDIR}/${filename}`;
 
           callback(generateViewerUrl(serverFileUrl), () => {
             console.log(`Successfully accessed Slack file ${url}`);
             deletionSweep();
-            downloadFile(teamId, res.file.url_private, fullFilename);
+            downloadMoleculeFile(teamId, res.file.url_private, filename);
           });
         })
         .catch((error) => {
@@ -225,9 +306,6 @@ function generateUrl(teamId, url, callback) {
 //
 // app configuration
 //
-
-// Serve molecule files
-app.use(`/${MOL_URL_MOUNT}`, express.static(MOL_DIRNAME));
 
 // Slack sends requests in the format of 'application/x-www-form-urlencoded'
 app.use(bodyParser.urlencoded({extended: true}));
@@ -268,7 +346,7 @@ app.get('/auth/redirect', function(req, res) {
   };
   request(options, (error, response, body) => {
     const JSONresponse = JSON.parse(body);
-    addTeam(JSONresponse.team_id, JSONresponse.access_token);
+    addTeam(JSONresponse.team_id, JSONresponse.access_token, true);
 
     // Send the user a response message
     if (!JSONresponse.ok) {
@@ -282,23 +360,13 @@ app.get('/auth/redirect', function(req, res) {
 });
 
 //
-// signal handling
-//
-
-// Performs any actions and exits the program gracefully.
-function handleExit() {
-  saveTeams(() => {
-    process.exit(0);
-  });
-}
-
-process.on('SIGINT', handleExit); // Sent by Ctrl-C
-process.on('SIGTERM', handleExit); // Sent by heroku
-process.on('SIGUSR2', handleExit); // Sent by nodemon
-
-//
 // Startup
 //
 
 init();
-app.listen(PORT, () => console.log(`MOVES now running on ${PORT}`));
+app.listen(
+    PORT,
+    () => console.log(`MOVES now running...
+  port: ${PORT}
+  url: ${APP_URL}`),
+);

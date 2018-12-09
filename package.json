@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@slack/client": "^4.8.0",
+    "aws-sdk": "^2.373.0",
     "body-parser": "^1.18.3",
     "express": "^4.16.4",
     "fs": "0.0.1-security",
