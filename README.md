@@ -32,6 +32,11 @@ on the three dots that appear, and clicking "Copy link to file".
 
 The following errors may occur when using MOVES.
 
+__Slack may give a timeout error for MOVES. This happens becaues the MOVES
+server may be inactive (It runs on a free account on Heroku, which puts the
+server to sleep after 30 minutes of inactivity). If this occurs, wait a few
+seconds and try it again.__
+
 If the file is a Slack file link, MOVES will check the following:
 * The file is one of the supported molecule file types
 * The file is on the correct Slack (i.e. MOVES can access it)
