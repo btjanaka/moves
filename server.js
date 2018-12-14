@@ -312,7 +312,7 @@ app.use(bodyParser.urlencoded({extended: true}));
 
 // Home page; helps tell if the app is running.
 app.get('/', function(req, res) {
-  res.end(fs.readFileSync('index.html'));
+  res.end(fs.readFileSync('pages/index.html'));
 });
 
 // Accepts requests to view molecules at the given URL.
@@ -332,7 +332,7 @@ app.post('/view', function(req, res) {
 
 // Provides an "Add to Slack" button.
 app.get('/auth', function(req, res) {
-  res.end(fs.readFileSync('add_to_slack.html'));
+  res.end(fs.readFileSync('pages/add_to_slack.html'));
 });
 
 // Obtains a workspace's OAuth token when installing to a new workspace.
