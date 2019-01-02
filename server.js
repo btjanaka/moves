@@ -330,11 +330,6 @@ app.post('/view', function(req, res) {
   });
 });
 
-// Provides an "Add to Slack" button.
-app.get('/auth', function(req, res) {
-  res.end(fs.readFileSync('pages/add_to_slack.html'));
-});
-
 // Obtains a workspace's OAuth token when installing to a new workspace.
 app.get('/auth/redirect', function(req, res) {
   const options = {
