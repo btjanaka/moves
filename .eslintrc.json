@@ -1,5 +1,5 @@
 {
-  "extends": "google",
+  "extends": ["google", "prettier"],
   "parserOptions": {
     "ecmaVersion": 2018
   },
@@ -7,7 +7,6 @@
     "es6": true
   },
   "rules": {
-    "require-jsdoc": 0,
-    "indent": 0
+    "require-jsdoc": 0
   }
 }
