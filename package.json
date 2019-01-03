@@ -4,6 +4,7 @@
   "description": "3D Molecule Viewer Plugin for Slack",
   "main": "app.js",
   "scripts": {
+    "start": "node server.js",
     "precommit": "lint-staged",
     "format": "prettier --write '**/*.{js,jsx,html,md}'",
     "lint": "eslint '**/*.{js,jsx}'",
