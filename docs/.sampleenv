@@ -1,0 +1,25 @@
+# Environment variables for MOVES
+
+# The URL where MOVES is running. Set to an ngrok URL if running locally, or to
+# the Heroku URL if running on Heroku. Do NOT include a slash ('/') at the end.
+export MOVES_APP_URL=http://xxxxxxxx.ngrok.io
+
+# Slack tokens
+export SLACK_CLIENT_ID=000000000000.000000000000
+export SLACK_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+export SLACK_SIGNING_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# AWS access keys
+export AWS_ACCESS_KEY_ID=XXXXXXXXXXXXXXXXXXXX
+export AWS_SECRET_ACCESS_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+# Name of the s3 bucket
+export S3_BUCKET_NAME=xxx
+
+# URL preceding all objects in the s3 bucket. Do NOT include a slash ('/') at
+# the end.
+export S3_BUCKET_URL=https://region.amazonaws.com/name
+
+# Port on which to run MOVES. On Heroku, the port is set by the environment, so
+# this would have no effect.
+export PORT=3000
