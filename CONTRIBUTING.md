@@ -72,6 +72,10 @@ the files you have staged:
 - Runs eslint on js and jsx files
 - Runs prettier on js, jsx, json, html, and md files
 
+See another
+[tutorial](https://www.39digits.com/automatically-format-your-javascript-commits-using-prettier-and-husky/)
+by 39digits for more info on setting up this automatic formatting.
+
 ## Testing
 
 There are currently no tests, but I am working on using [Steno](https://slackapi.github.io/steno/) to test the server.
